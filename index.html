@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>COMP4020 prototype</title>
+    <title>Bamboo chimes</title>
     <meta
       name="description"
-      content="Replace this with one sentence saying what this page is. A search result and a link preview both show it."
+      content="A wind chime you play with a mouse, a finger or a keyboard — seven bamboo tubes over an ink-wash grove, tuned to a five-tone scale."
     />
 
     <!--
@@ -18,20 +18,31 @@
     <meta property="og:image" content="./card.png" />
     <meta name="twitter:card" content="summary_large_image" />
 
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header>
       <nav aria-label="Primary">
-        <a href="./">Home</a>
+        <a href="./">Bamboo chimes</a>
       </nav>
     </header>
     <main>
-      <h1>COMP4020 prototype</h1>
-      <p data-testid="intro">
-        Replace this with your prototype. This week's brief is on the course website;
-        <code>spec/README.md</code> explains how the checks in this repo relate to it.
+      <h1>Bamboo chimes</h1>
+      <p class="hint">
+        Click, drag, or touch a tube to strike it. Tab and press Enter or Space to
+        play by keyboard.
       </p>
+      <div class="grove" id="grove" aria-label="Seven bamboo chimes, tuned to a five-tone scale" role="group">
+        <div class="beam" aria-hidden="true"></div>
+        <button class="chime" type="button" data-note="0" style="--h: 88%" aria-label="Chime 1 of 7, lowest tone"></button>
+        <button class="chime" type="button" data-note="1" style="--h: 96%" aria-label="Chime 2 of 7"></button>
+        <button class="chime" type="button" data-note="2" style="--h: 78%" aria-label="Chime 3 of 7"></button>
+        <button class="chime" type="button" data-note="3" style="--h: 100%" aria-label="Chime 4 of 7, middle tone"></button>
+        <button class="chime" type="button" data-note="4" style="--h: 72%" aria-label="Chime 5 of 7"></button>
+        <button class="chime" type="button" data-note="5" style="--h: 90%" aria-label="Chime 6 of 7"></button>
+        <button class="chime" type="button" data-note="6" style="--h: 66%" aria-label="Chime 7 of 7, highest tone"></button>
+      </div>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>
