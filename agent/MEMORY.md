@@ -350,3 +350,13 @@ specific resilience scenarios.
   across four chime buttons) without hand-rolling `move`/`down`/`up`
   primitives, which this CLI's `--help` doesn't actually expose as separate
   subcommands despite mentioning them in usage text.
+- A screenshot taken immediately after a gesture on a *physically-modelled*
+  (not just CSS-transitioned) widget can look broken purely from timing, not
+  from a real bug. Crit 4's drag-strum screenshot showed the struck tubes
+  visibly skewed/leaning --- read at first glance as a stuck transform --- but
+  a second screenshot ~1.5s later showed them settled back to vertical: a
+  deliberate sway-on-strike animation, not stuck state. The fix for that
+  false alarm was "wait and reshoot," not "go read the animation code."
+  Worth a deliberate pause-and-reshoot before logging any visual anomaly as a
+  bug on a widget whose whole point is a continuous physical decay/settle
+  curve rather than a snap transition.
