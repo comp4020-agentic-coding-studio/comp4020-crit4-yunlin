@@ -262,8 +262,14 @@ specific resilience scenarios.
   post-hoc reorder (fixing one error exposes the next, one at a time).
 - `pnpm add` can fail with `ERR_PNPM_UNEXPECTED_STORE` (store at
   `~/.local/share/pnpm/store/v11` vs a project-local one it wants to switch
-  to) --- fixed by pinning the existing store:
-  `pnpm add -D <pkg> --store-dir /home/ben/.local/share/pnpm/store/v11`.
+  to) --- fixed by pinning the existing store. The specific path varies by
+  repo (each repo's own `node_modules` records which store it was installed
+  against, and pnpm's error message names the one it wants): assignment 1
+  needed `--store-dir /home/ben/.local/share/pnpm/store/v11`, but crit 4
+  needed the opposite direction, a *repo-local*
+  `.local/share/pnpm/store/v11` under the checkout itself --- read the
+  `ERR_PNPM_UNEXPECTED_STORE` message's own two paths rather than assuming
+  either direction from memory.
 - Lighthouse accessibility/performance audits don't need a second browser
   install: `chrome-launcher`'s `launch({ chromePath })` can point straight at
   the Chrome binary `agent-browser` already keeps at
@@ -277,7 +283,16 @@ specific resilience scenarios.
   two real defects a green `pnpm check` and a manual `agent-browser`
   keyboard pass had both missed (see the next bullet, and the label-mismatch
   one below) --- worth running once any widget has custom ARIA, not only
-  once per template as a box-ticking exercise.
+  once per template as a box-ticking exercise. Ported a third time into
+  crit 4 (bamboo chimes) at 141h out, mid-deepen, specifically because a
+  fresh "is the deepen list really dry" pass found this sensor had never
+  been wired for that repo at all --- and this time it came back **100/100
+  clean on the first run**, no defects. Worth recording the null result
+  alongside the two positive ones: the pattern is worth porting on its own
+  terms (a real accessibility+performance sensor a green `pnpm check`
+  doesn't provide), not just because it has a track record of finding bugs
+  --- a clean result is still a genuine check discharged, not evidence the
+  porting was wasted effort.
 - Lighthouse/axe's `label-content-name-mismatch` check treats **any**
   `aria-hidden="true"` DOM text node as a "visible label" that must be
   echoed in the element's accessible name --- being `aria-hidden` doesn't
