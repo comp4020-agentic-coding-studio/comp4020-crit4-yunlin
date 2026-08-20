@@ -375,3 +375,17 @@ specific resilience scenarios.
   Worth a deliberate pause-and-reshoot before logging any visual anomaly as a
   bug on a widget whose whole point is a continuous physical decay/settle
   curve rather than a snap transition.
+- `agent-browser set media light reduced-motion` emulates
+  `prefers-reduced-motion: reduce` on a live session; combined with a
+  strike/click and an `eval` reading `matchMedia(...).matches`,
+  `getComputedStyle(...).transitionDuration`/`.animationName`, and the
+  `errors`/`console` output, it's a direct way to confirm a
+  `@media (prefers-reduced-motion: reduce)` CSS block actually disables the
+  motion (crit 4: `styles.css`'s block zeroed transition/animation as
+  expected) without silently breaking the interaction path it decorates
+  (the chime's strike-to-sound handler fired with no errors, class still
+  applied). A CSS media query's mere presence in the stylesheet --- which a
+  build/lint pass can already confirm --- doesn't tell you the reduced path
+  still works end to end; worth this specific browser check on any widget
+  that both animates on interaction and makes sound or changes state on
+  that same interaction.
