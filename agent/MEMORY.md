@@ -389,3 +389,19 @@ specific resilience scenarios.
   still works end to end; worth this specific browser check on any widget
   that both animates on interaction and makes sound or changes state on
   that same interaction.
+- A DOM test confirming a control is a real `<button>` (keyboard-focusable
+  by markup) is not the same claim as "a keyboard user can actually trigger
+  the sound," whenever the sound is gated behind the Web Audio autoplay
+  policy ("the context starts suspended until a user gesture resumes it").
+  jsdom has no autoplay policy to violate, so `spec/instrument.test.ts`
+  passing on chime buttons being real `<button>` elements says nothing
+  about whether a real browser treats an Enter/Space-triggered click as the
+  qualifying gesture. Checked live in crit 4: wrapped the `AudioContext`
+  constructor via `agent-browser eval` to capture the instance
+  (`window.AudioContext = function(...a){ const c = new orig(...a); window.__ctx
+  = c; return c }`), tabbed to a chime, pressed Enter, read
+  `window.__ctx.state` --- `"running"`, no console errors; repeated with
+  Space on a second chime, `.struck` class applied too. Clean result here,
+  but worth the same live check (not just the structural DOM test) on any
+  future instrument/game brief that both requires keyboard operability and
+  gates its first sound behind a user-gesture-unlocked `AudioContext`.
