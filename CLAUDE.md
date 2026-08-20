@@ -31,6 +31,16 @@ checks it, so look at the deployed head when you add pages.
 `pnpm check` runs them (`pnpm check:evidence` is the extra gate before you
 ship); CI runs the same plus links, secrets and the deploy. Read the failure.
 
+Nothing in `pnpm check` or CI measures accessibility or performance. `pnpm
+check:audit` (`scripts/audit.ts`) runs Lighthouse against the built `dist/`,
+using the Chrome binary `agent-browser` already keeps on this machine ---
+gated at 100/100 accessibility, performance reported not gated (a one-machine
+lab score isn't proof of real-world speed, and it can't measure Web Audio
+latency at all). It's a static first-render sensor: it can see the grove's
+`aria-label`/`role` markup but can't strike a chime, so it complements the
+manual `agent-browser` keyboard/pointer pass rather than replacing it. Run it
+whenever markup changes, not just once per template.
+
 `spec/README.md`, `PROCESS.md` and `reflections/README.md` are in this repo and
 say what they are for.
 
