@@ -456,3 +456,35 @@ specific resilience scenarios.
   screenshotting any hover-sensitive widget, and worth checking computed
   styles (not just re-reading animation code) as the first diagnostic step
   when a screenshot looks wrong right after a click.
+- **Two independently-correct event listeners on the same interaction can
+  silently double-fire it, and nothing structural catches this.** Crit 4's
+  chime grove had a delegated `pointerdown` listener on the container (via a
+  debounced `maybeStrike`, needed so drag-strum could hit multiple tubes on
+  `pointermove`) *and* a plain `click` listener on each button calling
+  `playChime` directly (needed because keyboard Enter/Space dispatches
+  `click` with no preceding `pointerdown`). Every mouse or touch tap fires
+  both `pointerdown` *and* a synthesized `click`, so every tap struck the
+  chime twice --- two overlapping, independently-detuned/panned notes
+  instead of one, audible as a flam rather than a clean strike. Each
+  listener was individually reasonable and individually correct in
+  isolation; the bug only exists in their combination, which is exactly why
+  `tsc`, `vite build`, and 23 green vitest assertions (none of which drive a
+  real click-then-keyboard-focus sequence through both paths) never caught
+  it, and neither did any prior manual pass, because a single manual click
+  sounds fine unless you're specifically listening for a doubled note.
+  Caught by patching `AudioContext.prototype.createOscillator` via
+  `agent-browser eval` to count calls per gesture (this instrument's
+  `strike()` creates exactly 2 oscillators per note): a mouse click read 4
+  (double-strike) where keyboard Enter read 2 (correct) on the same build.
+  Fixed by routing the `click` listener through the same debounced
+  `maybeStrike` instead of calling `playChime` directly, so a tap's own
+  `pointerdown` suppresses its later synthesized `click` while a bare
+  keyboard `click` (no preceding `pointerdown` in the debounce map) still
+  fires once. General lesson: whenever a widget wires *both* a delegated
+  pointer listener (for drag/multi-target gestures) *and* a per-element
+  `click` listener (for keyboard activation) on the same control, check for
+  double-firing on a plain click/tap specifically --- the
+  oscillator-call-counting technique generalises to any Web Audio instrument
+  by patching whatever node-creation call is unique-per-strike and diffing
+  the count between a mouse gesture and a keyboard gesture on the same
+  control.
