@@ -418,6 +418,28 @@ specific resilience scenarios.
   fake one --- worth this same "read the handler for a pointerType branch
   first" check before treating "I can't easily emulate touch" as a
   verification gap that needs closing by force.
+- **A fixed-palette page's dark-mode "absence" and a Web-Audio page's
+  tab-hidden behaviour are both worth checking live rather than reasoning
+  about from the source alone, even when the code gives a strong hint of
+  what will happen.** Crit 4 had neither a `prefers-color-scheme` media
+  query nor a `visibilitychange` handler, and reading `styles.css`/`main.ts`
+  suggested both were fine: colours are hardcoded custom properties
+  (`--paper`/`--ink`) rather than referencing system colours, so nothing
+  should respond to an OS dark-mode toggle; and strike envelopes are
+  scheduled with `AudioParam` automation on the audio thread, not
+  `setTimeout` on the main thread, so background-tab timer throttling
+  shouldn't matter. Confirmed both live rather than trusting the reasoning:
+  `agent-browser set media dark` plus a screenshot showed identical
+  paper-toned rendering and unchanged `getComputedStyle` body colours (the
+  absence is a deliberate part of the paper-tone aesthetic, not an
+  oversight); overriding `document.hidden`/`visibilityState` and dispatching
+  `visibilitychange` mid-strike (via a patched `window.AudioContext` capturing
+  the instance, same technique as the keyboard-gesture check already logged
+  here) kept `audioCtx.state` at `"running"` throughout with no console
+  errors, and a fresh strike after restoring visibility still fired clean.
+  Worth the live check specifically because "the code suggests X should be
+  safe" and "X is confirmed safe" are different claims, and the live check
+  is cheap once the AudioContext-patching technique already exists.
 - **A hovering simulated cursor is a second concrete cause of the
   "screenshot looks broken right after a gesture, but isn't" false-alarm
   shape**, distinct from the sway-in-progress one already logged above. Crit
