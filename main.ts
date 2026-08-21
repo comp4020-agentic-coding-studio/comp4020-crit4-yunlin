@@ -209,8 +209,12 @@ function setupChimes(): void {
     if (pointerDown) maybeStrike(event.target);
   });
 
+  // Keyboard activation (Enter/Space) dispatches "click" with no preceding
+  // "pointerdown", so this still needs its own listener --- but it must go
+  // through the same debounced path as pointerdown, or a mouse/touch tap
+  // (which fires both pointerdown and click) double-strikes the chime.
   for (const chime of chimes) {
-    chime.addEventListener("click", () => playChime(chime));
+    chime.addEventListener("click", () => maybeStrike(chime));
   }
 
   // A gentle continuous layer, like moving air in the grove: its loudness and
