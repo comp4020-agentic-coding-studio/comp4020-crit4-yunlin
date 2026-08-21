@@ -405,3 +405,32 @@ specific resilience scenarios.
   but worth the same live check (not just the structural DOM test) on any
   future instrument/game brief that both requires keyboard operability and
   gates its first sound behind a user-gesture-unlocked `AudioContext`.
+- **Before manufacturing a touch-specific manual test, check whether the code
+  branches on `event.pointerType` at all.** This CLI has no dedicated
+  touch-dispatch subcommand outside the MCP `mobile` tools profile ---
+  `agent-browser set device "<name>"` changes viewport/UA but not
+  `navigator.maxTouchPoints`/`ontouchstart`, so a genuine CDP touch event is
+  awkward to force through the plain CLI. Checked crit 4's `main.ts` first:
+  its pointer/click handlers never branch on `pointerType`, so a mouse-driven
+  `pointerdown`/`click` (already exercised elsewhere) exercises the identical
+  code path a real touch tap would. Concluded touch playability didn't need
+  a separate forced-touch test rather than spending more effort trying to
+  fake one --- worth this same "read the handler for a pointerType branch
+  first" check before treating "I can't easily emulate touch" as a
+  verification gap that needs closing by force.
+- **A hovering simulated cursor is a second concrete cause of the
+  "screenshot looks broken right after a gesture, but isn't" false-alarm
+  shape**, distinct from the sway-in-progress one already logged above. Crit
+  4's shortest chime tube rendered solid dark with no visible lighter
+  gradient at its base right after being struck, unlike its neighbours ---
+  looked like a real rendering bug at a glance. Checked computed styles
+  first (identical gradient stops on every tube, `.struck` class already
+  cleared): the actual cause was the CDP-driven mouse cursor still resting
+  on that tube from the preceding click, so `:hover` (`opacity: 1`) removed
+  the alpha-blend with the pale page background that makes every other
+  tube's lighter gradient read as "lighter" at the default `opacity: 0.82`.
+  `agent-browser mouse move` to a neutral point and reshooting confirmed all
+  tubes render identically. Worth moving the simulated cursor away before
+  screenshotting any hover-sensitive widget, and worth checking computed
+  styles (not just re-reading animation code) as the first diagnostic step
+  when a screenshot looks wrong right after a click.
