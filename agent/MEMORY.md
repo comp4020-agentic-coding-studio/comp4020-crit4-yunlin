@@ -542,3 +542,38 @@ specific resilience scenarios.
   the first draft, since this bug is invisible to `tsc`/build/vitest/a
   mouse-driven manual pass alike, and only shows up on real touch hardware
   or a deliberately capture-simulating dispatch like the one above.
+- **Calling `AudioParam.setTargetAtTime` (or any automation method) from a
+  raw, unthrottled DOM event handler schedules a permanent entry on that
+  param's timeline every single call, with no spec-mandated pruning of past
+  events.** Crit 4's continuous wind layer called `setTargetAtTime` on
+  `windGain.gain`/`windFilter.frequency` directly from a `pointermove`
+  listener with no rate limit --- confirmed via `WebSearch` against MDN and
+  a Firefox bugzilla thread that browsers keep every scheduled event in an
+  AudioParam's automation timeline indefinitely unless explicitly cleared
+  with `cancelScheduledValues`, since (unlike `setValueAtTime`)
+  `setTargetAtTime`'s open-ended exponential approach has no natural
+  endpoint the engine can prune from. Verified live: patched
+  `AudioParam.prototype.setTargetAtTime` to count calls, dispatched 200
+  synthetic `pointermove` events in a tight synchronous loop, got 400 calls
+  (2 params x 1 per move) with zero throttling --- a real drag at typical
+  60--120Hz would schedule tens of thousands of never-pruned entries per
+  minute. This is a different bug shape from every event-wiring fix logged
+  above (those were about *which* event fired or what its payload claimed;
+  this is unbounded resource growth from a *correctly*-firing, correctly-
+  targeted event called too often). Found by deliberately reading the
+  audio-graph code (`strike()`/`updateWind()`/`ensureAudio()`) with a
+  "what could grow unbounded under rapid interaction" question in mind,
+  after three straight event-wiring fixes had made "re-read the event
+  wiring" feel exhausted --- worth switching questions, not just re-reading
+  the same code, once one angle stops turning up anything new. Fixed by
+  throttling the call to once per 40ms, comfortably under the params' own
+  0.12s/0.2s `setTargetAtTime` smoothing time constants so nothing audible
+  is lost; confirmed the same burst technique now yields 2 calls instead of
+  400, and confirmed a realistically-spaced synthetic drag (~50ms between
+  moves) still updates the wind layer on every move. General lesson: any
+  future instrument/widget that maps continuous pointer/sensor input
+  straight to `setTargetAtTime`/`linearRampToValueAtTime`/etc. on every
+  raw event needs an explicit throttle matched to the param's own time
+  constant, not just "call it when the value changes" --- the same
+  oscillator/param-call-counting technique used for the double-strike and
+  implicit-capture bugs generalises cleanly to catching this one too.
