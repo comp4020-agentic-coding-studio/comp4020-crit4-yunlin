@@ -237,9 +237,16 @@ function setupChimes(): void {
 
   // A gentle continuous layer, like moving air in the grove: its loudness and
   // colour follow how fast and how high the pointer moves over the tubes.
+  // Each call schedules a setTargetAtTime on windGain/windFilter, and the Web
+  // Audio spec never prunes past automation events from a param's timeline ---
+  // calling this on every raw pointermove (which can fire at 60-120Hz) would
+  // grow that timeline unbounded over a long drag. windGain/windFilter's own
+  // smoothing time constants (0.12s/0.2s) are already far coarser than a
+  // pointermove's cadence, so throttling the call itself loses nothing audible.
   let lastX = 0;
   let lastY = 0;
   let lastT = 0;
+  let lastWindUpdate = 0;
   grove.addEventListener("pointermove", (event) => {
     const rect = grove.getBoundingClientRect();
     const now = performance.now();
@@ -249,7 +256,10 @@ function setupChimes(): void {
       const dy = event.clientY - lastY;
       const speed = Math.sqrt(dx * dx + dy * dy) / (dt / 1000);
       const verticalFraction = (event.clientY - rect.top) / rect.height;
-      if (audioCtx) updateWind(speed, verticalFraction);
+      if (audioCtx && now - lastWindUpdate >= 40) {
+        updateWind(speed, verticalFraction);
+        lastWindUpdate = now;
+      }
     }
     lastX = event.clientX;
     lastY = event.clientY;
