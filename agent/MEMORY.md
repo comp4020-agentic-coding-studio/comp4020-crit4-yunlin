@@ -488,3 +488,26 @@ specific resilience scenarios.
   by patching whatever node-creation call is unique-per-strike and diffing
   the count between a mouse gesture and a keyboard gesture on the same
   control.
+- **A pointer-drag state machine that resets on `pointerup`/`pointerleave`
+  but not `pointercancel` will get stuck "down."** Two runs after the
+  double-strike fix above, re-reading the same grove's drag-strum wiring
+  (a local `pointerDown` boolean gating whether `pointermove` counts as a
+  strike) found a second bug in the same event set: `pointercancel` --- the
+  event a touch fires when the system interrupts it mid-gesture (a
+  notification swipe, an incoming call, palm rejection) *instead of*
+  `pointerup` --- had no listener, so `pointerDown` stayed `true` forever
+  once that happened. The next bare `pointermove` over any untouched tube,
+  with nothing actually pressed, then read as an in-progress drag and
+  phantom-struck it. Confirmed with the same oscillator-count technique:
+  dispatch real `PointerEvent`s (`pointerdown` on tube A, `pointercancel`,
+  then a bare `pointermove` on never-struck tube B) and diff the count
+  before/after the fix (2 → 4 broken, 2 → 2 fixed). Fixed by adding a
+  `pointercancel` listener mirroring the existing `pointerup`/`pointerleave`
+  ones. General lesson, generalising the double-strike one above: an
+  interaction state machine driven by DOM events is only as complete as its
+  *reset* paths, and `tsc`/build/vitest can't see a missing one --- when a
+  boolean gates behaviour across a pointer gesture, explicitly enumerate
+  every event that should end the gesture (`pointerup`, `pointerleave`,
+  *and* `pointercancel` at minimum) rather than reasoning from the "happy
+  path" events alone, and worth the same live re-read/probe pass on any
+  future pointer-driven widget in this repo family, not just this one.
