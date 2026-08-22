@@ -195,9 +195,20 @@ function setupChimes(): void {
     playChime(target);
   }
 
+  // Touch pointers get implicit capture on pointerdown: the browser pins
+  // event.target to whichever tube the finger first touched, so a dragging
+  // finger's later pointermoves keep reporting that same original tube even
+  // as it slides over its neighbours. elementFromPoint reads the real
+  // element under the pointer's current coordinates regardless of capture,
+  // which is what drag-strum needs; mouse pointers aren't captured, so this
+  // is a no-op improvement for them.
+  function chimeAt(event: PointerEvent): Element | null {
+    return document.elementFromPoint(event.clientX, event.clientY);
+  }
+
   grove.addEventListener("pointerdown", (event) => {
     pointerDown = true;
-    maybeStrike(event.target);
+    maybeStrike(chimeAt(event));
   });
   grove.addEventListener("pointerup", () => {
     pointerDown = false;
@@ -213,7 +224,7 @@ function setupChimes(): void {
     pointerDown = false;
   });
   grove.addEventListener("pointermove", (event) => {
-    if (pointerDown) maybeStrike(event.target);
+    if (pointerDown) maybeStrike(chimeAt(event));
   });
 
   // Keyboard activation (Enter/Space) dispatches "click" with no preceding
