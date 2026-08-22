@@ -205,6 +205,13 @@ function setupChimes(): void {
   grove.addEventListener("pointerleave", () => {
     pointerDown = false;
   });
+  // A touch can be interrupted by the system (a notification swipe, an
+  // incoming call, palm rejection) without ever firing "pointerup" --- without
+  // this, the next bare pointermove over an untouched tube reads as a drag
+  // still in progress and phantom-strikes it.
+  grove.addEventListener("pointercancel", () => {
+    pointerDown = false;
+  });
   grove.addEventListener("pointermove", (event) => {
     if (pointerDown) maybeStrike(event.target);
   });
