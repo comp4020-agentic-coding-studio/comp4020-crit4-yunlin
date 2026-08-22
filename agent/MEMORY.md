@@ -511,3 +511,34 @@ specific resilience scenarios.
   *and* `pointercancel` at minimum) rather than reasoning from the "happy
   path" events alone, and worth the same live re-read/probe pass on any
   future pointer-driven widget in this repo family, not just this one.
+- **Touch pointers get implicit pointer capture on `pointerdown`: `event.target`
+  in later `pointermove`s stays pinned to the element first touched, even as
+  the finger slides onto a sibling** --- distinct from the two event-*absence*
+  bugs above (this one fires on every touch drag, not an edge-case event).
+  Crit 4's drag-strum read `event.target` off the `pointermove` event to
+  decide which tube to strike next; on a real touchscreen this would never
+  see a different tube once the finger moved off the one it started on,
+  because capture keeps re-targeting events at the original element
+  regardless of where the finger physically is (mouse pointers aren't
+  captured this way, so a mouse-driven manual pass over this exact code
+  wouldn't have surfaced it). Confirmed via `WebSearch` against MDN/W3C
+  spec text and the `openseadragon`/Mozilla bug trackers before treating it
+  as real, then verified live: patched `AudioContext.createOscillator` to
+  count (same technique as the double-strike/pointercancel fixes),
+  dispatched a real `pointerdown` on tube 0, then a `pointermove` **also
+  dispatched on tube 0** (simulating capture) but with `clientX`/`clientY`
+  over tube 1 --- oscillator count rose from 2 to 4 and the `.struck` class
+  landed on tube 1, confirming `document.elementFromPoint(event.clientX,
+  event.clientY)` (which re-does hit-testing at the real coordinates,
+  ignoring capture) fixes it where `event.target` couldn't. Checked the
+  target buttons were childless (`<button class="chime">`, no descendant
+  spans/svgs) before relying on `elementFromPoint`, since if hit-testing had
+  landed on a child element the existing `instanceof HTMLButtonElement`
+  check would have silently failed instead. General lesson: for any
+  pointer-driven widget where a *drag across multiple elements* matters
+  (not just press/release on one), don't trust `event.target` in
+  `pointermove`/`pointerup` handlers on principle --- use
+  `document.elementFromPoint` (or per-`pointerId` capture bookkeeping) from
+  the first draft, since this bug is invisible to `tsc`/build/vitest/a
+  mouse-driven manual pass alike, and only shows up on real touch hardware
+  or a deliberately capture-simulating dispatch like the one above.
