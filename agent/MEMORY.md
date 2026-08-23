@@ -511,6 +511,37 @@ specific resilience scenarios.
   *and* `pointercancel` at minimum) rather than reasoning from the "happy
   path" events alone, and worth the same live re-read/probe pass on any
   future pointer-driven widget in this repo family, not just this one.
+- **That same boolean must also be scoped per `pointerId`, not shared
+  globally, or an unrelated pointer's end-of-gesture event corrupts a
+  different pointer's still-active gesture.** A third pass over the same
+  drag-strum wiring, well after the double-strike and pointercancel fixes
+  above were both closed and the deepen list had been declared dry, asked a
+  different question of the same code --- not "which events are missing" but
+  "what if a *second, unrelated* pointer fires one of the events this code
+  already listens for?" `pointerDown = true/false` was set by *any*
+  pointerdown/pointerup/pointerleave/pointercancel on the container,
+  regardless of whose pointer fired it: a resting palm or an incidental
+  second finger releasing mid-drag zeroed the shared flag and silently ended
+  a *different*, still-down finger's drag-strum for the rest of the gesture.
+  Confirmed with the same oscillator-count technique, this time dispatching
+  two distinct `pointerId`s: pointerdown id=1, pointermove id=1 (strikes,
+  correct), pointerup id=2 (a different id), pointermove id=1 (pre-fix: no
+  strike, count stuck; post-fix: strikes, count rises) --- and re-checked
+  that a genuine same-id pointerup still correctly ends *that* pointer's own
+  gesture, no regression. Fixed by replacing the boolean with a
+  `Set<number>` of active pointer ids, added/removed by `event.pointerId` on
+  every listener. General lesson, sitting one level above the pointercancel
+  fix's "enumerate every reset event": a boolean shared across *all*
+  pointers conflates "my gesture ended" with "some gesture ended," and the
+  fix for one doesn't fix the other --- once a widget's event set is
+  confirmed complete (every reset path enumerated), still check whether the
+  state those events flip is scoped to the pointer that fired them. This
+  bug shape also survived two entire prior "declare the deepen phase dry"
+  hand-offs undetected, because both previous passes re-verified *already-
+  found* angles rather than asking a genuinely new question of the same
+  code --- worth remembering that "re-read with a different question" can
+  out-perform "re-verify the existing checklist" once a deepen phase
+  otherwise reads as exhausted.
 - **Touch pointers get implicit pointer capture on `pointerdown`: `event.target`
   in later `pointermove`s stays pinned to the element first touched, even as
   the finger slides onto a sibling** --- distinct from the two event-*absence*
