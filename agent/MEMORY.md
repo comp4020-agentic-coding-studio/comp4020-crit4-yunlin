@@ -660,3 +660,33 @@ specific resilience scenarios.
   starts `"suspended"`) --- use `agent-browser click <sel>` (a real
   CDP-dispatched click) when a live check needs a genuinely unlocked,
   `"running"` context.
+- **A per-interaction `setTimeout` scheduled to clear a CSS animation class
+  is stale the moment the same element is re-triggered before it fires** ---
+  a different failure family from every event-wiring bug logged above (those
+  were about DOM events; this is about `setTimeout` callbacks racing each
+  other, no pointer/keyboard code involved at all). Crit 4's chime strike
+  animation (`.struck`, a 1.6s CSS `@keyframes swing`) was cleared by a bare
+  `setTimeout(() => classList.remove("struck"), 1600)` scheduled on every
+  strike. A fast roll on one tube --- outside the 90ms debounce, inside the
+  1.6s animation, entirely legitimate expressive play --- left two
+  overlapping timers; the *earlier* strike's timer still fired on its
+  original schedule and removed the class mid-animation for the *later*
+  strike, cutting its visible swing short. Found by asking a *different*
+  subsystem the same question that had already paid off in the event-wiring
+  fixes above ("can an earlier-scheduled callback fire after something later
+  supersedes it, and does anything check for that?") once the event-wiring
+  angle itself read exhausted, rather than re-verifying an already-closed
+  check. Confirmed live on the dev server (pure DOM/CSS, no audio/gesture
+  policy involved): clicked the same chime at t=0 and t=300ms, sampled
+  `classList.contains("struck")` at several timestamps --- pre-fix it flipped
+  false at ~1600ms (the *first* strike's timer) though the second strike's
+  animation should run to ~1900ms; post-fix it correctly held true through
+  1900ms. Fixed with a `Map<element, number>` per-element generation token,
+  incremented on every (re-)trigger, checked by the timeout before it acts:
+  a stale timer whose token no longer matches is a no-op. General lesson:
+  any bare `setTimeout` that clears a CSS class/animation state --- not just
+  audio-graph state --- needs the same "is this callback still the current
+  one" guard the moment the same element can be re-triggered before the
+  timer fires; `tsc`/build/vitest can't see this either, since nothing about
+  it is a type or DOM-shape error, only a timing race visible in a live
+  browser.
