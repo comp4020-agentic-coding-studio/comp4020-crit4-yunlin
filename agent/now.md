@@ -2,74 +2,80 @@
 
 ## State
 
-comp4020-crit4-yunlin ("An instrument"), 76h to cutoff at the start of this
-run --- not called the final run. Working tree was clean and `pnpm check`/
-`pnpm check:audit` were already green (the implicit-capture fix from the
-previous run had landed). Followed the previous hand-off's own suggested
-third angle: stopped re-reading event wiring and instead read the audio-graph
-code (`strike()`, `updateWind()`, `ensureAudio()`) for a failure mode nobody
-had looked for yet.
+comp4020-crit4-yunlin ("An instrument"), 69h to cutoff at the start of this
+run --- not called the final run. Working tree was clean, `pnpm check`
+green. Followed the previous hand-off's own list of two remaining untried
+deepen angles and closed both, live, with clean (no-bug) results.
 
-**Found and fixed unbounded AudioParam automation growth in the wind
-layer.** `updateWind()` calls `setTargetAtTime` on `windGain.gain` and
-`windFilter.frequency`, and was wired straight to a raw `pointermove`
-listener with no throttling. Per the Web Audio spec (confirmed via
-`WebSearch` against MDN/bugzilla discussion before treating it as real),
-`setTargetAtTime` calls append to a param's automation timeline and are
-never pruned --- so every single pointermove during a drag schedules two more
-permanent entries. Verified live in `agent-browser`: patched
-`AudioParam.prototype.setTargetAtTime` to count calls, dispatched 200
-synthetic `pointermove` events in a tight loop, got 400 calls (2 params x
-1 per move) with zero throttling. A real drag at 60-120Hz would schedule
-tens of thousands of these per minute, none ever pruned per spec --- a
-different bug shape from all four prior finds in this deliverable
-(those were event-wiring gaps/lies; this is unbounded resource growth in the
-audio graph itself, exactly the "rapid-fire exhausting some resource" angle
-the previous hand-off named as untried). Fixed by throttling the call to
-once per 40ms (well under the params' own 0.12s/0.2s smoothing time
-constants, so no audible loss of responsiveness) --- confirmed the burst
-count dropped 400->2 for the same synthetic burst, and confirmed a
-realistically-spaced drag (one move per ~50ms) still updates the wind layer
-on every move. `pnpm check` (23 tests) stayed green throughout; this bug is
-invisible to jsdom/vitest just like the four before it, only found by
-reading the audio code with a resource-growth question in mind rather than
-running an already-green scenario again. Commit `52574b0`. Pushed.
+**1. Per-strike oscillator/gain node cleanup under sustained rapid-fire ---
+confirmed no leak.** `strike()` never stores or disconnects its per-note
+nodes explicitly; cleanup relies entirely on the Web Audio spec's automatic
+lifetime management of stopped source nodes with no external refs. Verified
+live rather than trusting the spec-reading: patched
+`AudioContext.prototype.createOscillator` to register every created node in
+a `FinalizationRegistry`, fired 30 rounds of all 7 chimes (420 oscillators),
+waited past their decay envelopes, then nudged V8's GC with several rounds
+of large-array allocate/discard. All 420 registered nodes fired their
+finalizer --- confirmed collected, none held live. A clean result, not a
+wasted check: this is the exact "plausible per spec, not yet verified live"
+gap the prior hand-off named.
 
-Full lesson written into `MEMORY.md`'s Working environment section.
+**2. Real page-freeze/thaw cycle (not just `visibilitychange`) ---
+AudioContext survives, confirmed on the production build only.** Chrome's
+CDP `Page.setWebLifecycleState` ("frozen" / "active") models actual
+OS-triggered tab backgrounding more faithfully than overriding
+`document.hidden` (which the previous crit-4 memory entry already covered).
+`agent-browser` has no built-in command for this, so drove it directly over
+the browser's CDP websocket from a small Node script
+(`Target.getTargets` -> `Target.attachToTarget` -> `Page.setWebLifecycleState`
+via the session). First attempt against `pnpm dev` (localhost:5173) showed
+the page's JS realm reset after thaw --- looked alarming until `agent-browser
+console` showed it was Vite's dev-mode HMR client reloading on WebSocket
+reconnect ("server connection lost. Polling for restart..."), a dev-tooling
+artifact with no counterpart in the shipped static build. Re-ran against
+`pnpm build && pnpm preview` (localhost:4173, no HMR client) instead: the
+AudioContext stayed `"running"` across freeze->1.5s->thaw, no console
+errors, and a strike fired clean immediately after thaw. Worth remembering
+for any future CDP-level test on this repo family: always point it at the
+built/preview server, not the dev server, or a Vite dev-client artifact
+(mid-test full page reload) will read as a false bug.
+
+Both angles from the last hand-off's "not yet tried" list are now closed
+clean. No code changes this run --- the deepen checklist for this
+deliverable is genuinely dry: five real bugs already fixed across five
+distinct shapes (event-wiring gaps x2, untrustworthy event.target, unbounded
+AudioParam growth, and now these two null results closing out node-lifetime
+and OS-level suspend). `pnpm check` (23 tests) and `pnpm check:audit`
+(100/100 Lighthouse a11y, confirmed clean in an earlier run) both green.
+Dev and preview servers shut down at the end of this run.
 
 ## Next action
 
-Not this deliverable's final run yet. When a future run's prompt calls it
-the last one:
+Not this deliverable's final run yet. This run found nothing to fix, so
+there is no untried angle queued for the next deepen run either --- per the
+doctrine, don't manufacture a redundant pass. When a future run's prompt
+calls this deliverable's run "last":
 
-- Write `PROCESS.md` for real (still the unfilled template as of this run),
-  citing at minimum: the bamboo-chimes build (`3fb5e9f`), the spec test
-  (`f931494`), the audit-sensor addition (`1d0f942`...`d15af76`), the three
-  event-wiring fixes as two moments (double-strike `2b40af7` + pointercancel
-  `aa6e9c8` sharing a root cause of incomplete event coverage; implicit-
-  capture `7f8b527` as its own distinct "don't trust event.target" shape),
-  and this run's wind-automation throttle (`52574b0`) as a fifth, different
-  shape again: unbounded resource growth in the audio graph rather than a
-  wiring gap.
-- Write `reflections/crit-4.md` (150--300 words, the two standing prompts;
-  `reflections/` currently has no crit-4.md, only the template README).
-- Re-run `pnpm check` and `pnpm check:evidence` clean, then the finishing
+- Write `PROCESS.md` for real (still the unfilled template). Cite at
+  minimum: the bamboo-chimes build (`3fb5e9f`), the spec test (`f931494`),
+  the audit-sensor addition (`1d0f942`...`d15af76`), the three event-wiring
+  fixes as two moments (double-strike `2b40af7` + pointercancel `aa6e9c8`
+  sharing a root cause of incomplete event coverage; implicit-capture
+  `7f8b527` as its own "don't trust event.target" shape), the wind-automation
+  throttle (`52574b0`, unbounded resource growth), and this run's two clean
+  verification passes (node-lifetime GC, CDP page-freeze) as evidence the
+  deepen phase was exhausted deliberately, not abandoned early.
+- Write `reflections/crit-4.md` (150--300 words, the two standing prompts).
+- Re-run `pnpm check` and `pnpm check:evidence` clean, then a finishing
   browser sweep (both viewports, console clean) before push.
 - Multi-touch chords remain an acknowledged, unclosable gap in this
-  environment --- don't keep re-opening it as a task.
+  environment --- don't re-open it as a task.
 - Don't re-check the live-URL-is-404 thing as if it were new information.
 
-If a future deepen run finds the checklist dry again: five real bugs have
-now come from reading `main.ts` by hand with a specific failure-mode
-question in mind, never from re-running an already-green scenario. Angles
-tried so far: "what event isn't handled" (double-strike, pointercancel),
-"is a handled event's payload trustworthy" (implicit capture), "does
-anything grow unbounded under repeated/rapid interaction" (this run's wind
-fix). Angles not yet tried: `AudioContext` behaviour across an actual tab
-suspend/resume cycle triggered by the OS (not just the `visibilitychange`
-override already checked), and whether `strike()`'s per-note oscillator/gain
-node graph is ever actually garbage-collected under sustained rapid-fire
-strikes (plausible it already is, per spec semantics for stopped source
-nodes with no external refs, but not verified live the way the wind-param
-growth was). If a careful pass on one of those turns up nothing, that's the
-actual signal to treat the next run as the finishing-steps run.
+If a future run somehow needs a fresh angle before being called last: no
+known one remains from this deliverable's own event/audio-graph code. Would
+need to look outside main.ts entirely (styles.css edge cases already
+covered by the reduced-motion/dark-mode checks; markup/audit already
+Lighthouse-clean) --- reasonable to treat "nothing new on re-read" here as
+the actual signal this deliverable is ready for finishing steps whenever the
+prompt calls it, not a reason to keep inventing checks.

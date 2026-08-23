@@ -577,3 +577,55 @@ specific resilience scenarios.
   constant, not just "call it when the value changes" --- the same
   oscillator/param-call-counting technique used for the double-strike and
   implicit-capture bugs generalises cleanly to catching this one too.
+- **`FinalizationRegistry` is a direct way to verify Web Audio node
+  garbage-collection claims live, rather than trusting the spec's automatic-
+  lifetime-management wording.** Crit 4's `strike()` never stores or
+  disconnects its per-note oscillator/gain nodes --- correct per spec (a
+  stopped source node with no external references becomes eligible for GC),
+  but unverified until checked directly. Patched
+  `AudioContext.prototype.createOscillator` to register every created node
+  in a `FinalizationRegistry`, fired 420 oscillators across 30 rounds of
+  rapid strikes, waited past their decay envelopes, then nudged V8's GC with
+  several rounds of large-array allocate/discard (no `window.gc()` exposed
+  without `--js-flags=--expose-gc`, which this Chrome launch doesn't set).
+  All 420 fired their finalizer --- confirmed collected, a clean result
+  closing the "is this actually collected" gap a prior hand-off had flagged
+  as plausible-but-unverified. Worth this technique on any future
+  instrument/widget whose per-interaction node graph relies on implicit
+  spec-mandated cleanup rather than explicit `disconnect()` calls.
+- **Chrome's CDP `Page.setWebLifecycleState` (`"frozen"`/`"active"`) models
+  real OS-triggered tab backgrounding more faithfully than overriding
+  `document.hidden`/dispatching `visibilitychange`** (the latter already
+  logged above as its own check) --- and it must be driven against the
+  *built/preview* server, not `pnpm dev`. `agent-browser` has no built-in
+  command for this CDP method; drove it directly by taking the browser
+  websocket URL (`agent-browser get cdp-url`) into a small Node script
+  (Node 24's native `WebSocket`) that calls `Target.getTargets` ->
+  `Target.attachToTarget` (flatten mode, to get a `sessionId`) ->
+  `Page.setWebLifecycleState`, then `Runtime.evaluate` with that
+  `sessionId` to read page state before/after. First run against
+  `localhost:5173` (`pnpm dev`) showed the page's JS realm reset after
+  thaw --- an injected `AudioContext`-wrapping patch and its captured
+  instance both vanished --- which looked like a real freeze/thaw bug until
+  `agent-browser console` showed Vite's dev-mode HMR client logging "server
+  connection lost. Polling for restart..." and reconnecting: freezing the
+  page drops the dev WebSocket, and Vite's client forces a full reload on
+  reconnect, a dev-tooling artifact with zero counterpart in the shipped
+  static build. Re-ran against `pnpm build && pnpm preview` (no HMR client)
+  instead: the `AudioContext` stayed `"running"` across a full
+  frozen->1.5s->active cycle, no console errors, and a strike fired clean
+  immediately after thaw. General lesson: any future CDP-level test that
+  simulates browser/OS-level page lifecycle events on a repo from this
+  starter template needs to target the built preview server specifically,
+  or Vite's own dev-reconnect behaviour will read as a false bug. Also
+  worth remembering separately: `window.audioCtx`-style checks only work if
+  the variable is genuinely global --- this repo's `audioCtx` is a
+  module-scoped `let` in `main.ts`, invisible on `window`, so any live probe
+  needs to wrap the global `AudioContext`/`OscillatorNode` constructors (as
+  this and the double-strike/pointercancel/wind-throttle checks above all
+  do) rather than expecting to read the app's internal state directly. And
+  a synthetic `element.click()` via `eval` does **not** count as a user
+  gesture for the Web Audio autoplay policy (a context created that way
+  starts `"suspended"`) --- use `agent-browser click <sel>` (a real
+  CDP-dispatched click) when a live check needs a genuinely unlocked,
+  `"running"` context.
