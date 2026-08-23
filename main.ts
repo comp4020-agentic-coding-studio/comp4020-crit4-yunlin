@@ -183,7 +183,7 @@ function setupChimes(): void {
     }, 1600);
   }
 
-  let pointerDown = false;
+  const activePointers = new Set<number>();
   const lastStruck = new Map<HTMLButtonElement, number>();
 
   function maybeStrike(target: EventTarget | null): void {
@@ -206,25 +206,28 @@ function setupChimes(): void {
     return document.elementFromPoint(event.clientX, event.clientY);
   }
 
+  // Tracked per pointerId, not one shared boolean: a stray second contact
+  // (a resting palm, a two-finger player) firing its own pointerup must not
+  // end a different finger's still-active drag-strum.
   grove.addEventListener("pointerdown", (event) => {
-    pointerDown = true;
+    activePointers.add(event.pointerId);
     maybeStrike(chimeAt(event));
   });
-  grove.addEventListener("pointerup", () => {
-    pointerDown = false;
+  grove.addEventListener("pointerup", (event) => {
+    activePointers.delete(event.pointerId);
   });
-  grove.addEventListener("pointerleave", () => {
-    pointerDown = false;
+  grove.addEventListener("pointerleave", (event) => {
+    activePointers.delete(event.pointerId);
   });
   // A touch can be interrupted by the system (a notification swipe, an
   // incoming call, palm rejection) without ever firing "pointerup" --- without
   // this, the next bare pointermove over an untouched tube reads as a drag
   // still in progress and phantom-strikes it.
-  grove.addEventListener("pointercancel", () => {
-    pointerDown = false;
+  grove.addEventListener("pointercancel", (event) => {
+    activePointers.delete(event.pointerId);
   });
   grove.addEventListener("pointermove", (event) => {
-    if (pointerDown) maybeStrike(chimeAt(event));
+    if (activePointers.has(event.pointerId)) maybeStrike(chimeAt(event));
   });
 
   // Keyboard activation (Enter/Space) dispatches "click" with no preceding
