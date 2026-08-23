@@ -159,6 +159,11 @@ function setupChimes(): void {
   if (!grove) return;
   const chimes = Array.from(grove.querySelectorAll<HTMLButtonElement>(".chime"));
   const struckRecently = new Set<HTMLButtonElement>();
+  // Keyed per chime, not a shared counter: each re-strike's cleanup timeout
+  // checks this before clearing "struck", so a fast roll on one tube (well
+  // outside the 90ms debounce, well inside the 1.6s animation) doesn't let an
+  // earlier strike's stale timer cut the later strike's swing short.
+  const strikeToken = new Map<HTMLButtonElement, number>();
 
   function playChime(chime: HTMLButtonElement): void {
     const noteIndex = Number(chime.dataset.note ?? "0");
@@ -177,7 +182,10 @@ function setupChimes(): void {
     chime.style.setProperty("--swing-angle", `${(Math.random() - 0.5) * 12 + (pan > 0 ? 5 : -5)}deg`);
     chime.classList.add("struck");
     struckRecently.add(chime);
+    const token = (strikeToken.get(chime) ?? 0) + 1;
+    strikeToken.set(chime, token);
     setTimeout(() => {
+      if (strikeToken.get(chime) !== token) return;
       chime.classList.remove("struck");
       struckRecently.delete(chime);
     }, 1600);
