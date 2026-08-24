@@ -708,3 +708,34 @@ specific resilience scenarios.
   timer fires; `tsc`/build/vitest can't see this either, since nothing about
   it is a type or DOM-shape error, only a timing race visible in a live
   browser.
+- **Back-forward cache (bfcache) restore --- a user navigating away via a
+  link/address bar and returning with Back --- is a distinct scenario from
+  both the tab-visibility-change check and the CDP
+  `Page.setWebLifecycleState` freeze/thaw check already logged above, and
+  worth its own live pass on any Web Audio page**, since neither of those
+  simulates an actual history navigation. Checked crit 4 against the built
+  `pnpm preview` server (not `pnpm dev`, per the standing HMR note above ---
+  Vite's dev client forces a reload on reconnect and would read as a false
+  bfcache bug). Patched `window.AudioContext`/`createOscillator` via
+  `agent-browser eval` (capturing the instance and a call counter, same
+  technique as the double-strike/wind-throttle checks), unlocked audio with
+  a real `agent-browser click`, navigated to an external URL with `open`,
+  then used `agent-browser back` (a genuine history navigation, distinct
+  from re-`open`-ing the original URL) to return. Chrome restored the page
+  from bfcache with the JS realm fully intact --- the eval-injected patches
+  and captured `AudioContext` instance both survived, unlike the dev-server
+  HMR-reload case --- and `audioCtx.state` stayed `"running"` throughout
+  with no console errors; a real click immediately after the restore still
+  struck cleanly (oscillator count rose, `.struck` applied correctly once
+  re-checked right after the click --- an earlier read of `false` was just
+  command-dispatch latency past the 1.6s animation window, not a bug).
+  Clean result, no fix needed, but a genuinely different lifecycle path than
+  the ones already checked --- worth the same live bfcache pass (not just
+  tab-hidden or CDP-freeze) on any future page whose first sound is gated
+  behind an `AudioContext` unlock. Also worth noting as a harness quirk, not
+  an app finding: a backgrounded `vite preview` shell reported "completed"
+  in a stale task notification while still actually serving traffic, and
+  the PID the background-task tool tracked wasn't the PID actually holding
+  the listening socket --- `lsof -i :<port>` (or `ss -ltnp`) found the real
+  listener reliably when a plain `kill` on the tracked PID didn't stop the
+  server.
