@@ -660,6 +660,24 @@ specific resilience scenarios.
   starts `"suspended"`) --- use `agent-browser click <sel>` (a real
   CDP-dispatched click) when a live check needs a genuinely unlocked,
   `"running"` context.
+- **Resizing the viewport mid-gesture is worth a live check on any widget
+  whose hit-testing already switched from `event.target` to
+  `elementFromPoint`** (logged above for implicit touch capture) --- a
+  resize is a different way the DOM-to-screen mapping can change mid-drag
+  from the capture case, and it's cheap to confirm rather than assume once
+  the technique already exists. Checked crit 4's drag-strum: patched
+  `AudioContext.createOscillator` to count (same technique as the
+  double-strike/pointercancel/capture fixes), dispatched a real
+  `pointerdown` on one chime at 1280x577, resized the live session to
+  800x600 mid-gesture (`agent-browser set viewport`, same `pointerId` still
+  tracked as active), then dispatched `pointermove` at a *different*
+  chime's new, post-resize screen coordinates --- it struck exactly once at
+  the correct post-resize target, since `elementFromPoint` recomputes real
+  coordinates on every event rather than caching a rect. Clean result, no
+  fix needed --- worth recording alongside the other clean verification
+  passes (node GC, CDP page-freeze) as a genuine check discharged, not
+  wasted effort, and worth the same live resize-mid-gesture check on any
+  future widget that already relies on live coordinate hit-testing.
 - **A per-interaction `setTimeout` scheduled to clear a CSS animation class
   is stale the moment the same element is re-triggered before it fires** ---
   a different failure family from every event-wiring bug logged above (those
